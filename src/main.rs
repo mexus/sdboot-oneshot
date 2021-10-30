@@ -42,7 +42,6 @@ enum Command {
         entry: String,
     },
 
-    #[cfg(target_os = "linux")]
     /// Removes the one shot entry.
     Unset,
 
@@ -95,7 +94,7 @@ fn main() -> Result<()> {
         .apply()
         .context("Unable to initialize logging")?;
 
-    let manager = Manager::new();
+    let mut manager = Manager::new();
 
     log::info!(r#"Default entry: "{}""#, manager.get_default_entry()?);
     log::info!(r#"Currently booted: "{}""#, manager.get_selected_entry()?);
@@ -114,7 +113,6 @@ fn main() -> Result<()> {
 
     match command {
         Some(Command::Set { entry }) => {
-            let mut manager = manager;
             manager.set_oneshot(&entry)?;
             log::info!(r#"Oneshot entry set to "{}""#, entry);
             if !entries.contains(&entry) {
@@ -124,15 +122,12 @@ fn main() -> Result<()> {
                 )
             }
         }
-        #[cfg(target_os = "linux")]
         Some(Command::Unset) => manager.remove_oneshot()?,
         Some(Command::Interactive) => {
             let mut editor = rustyline::Editor::new();
             editor.set_helper(Some(sdboot_oneshot::interactive::RustylineHelper::new(
                 entries.clone(),
             )));
-
-            let mut manager = manager;
 
             let prompt = if colorful_logs {
                 format!(
@@ -155,7 +150,6 @@ fn main() -> Result<()> {
                 let mut input = input.split(char::is_whitespace).filter(|s| !s.is_empty());
                 match input.next() {
                     Some("set") => { /* No op */ }
-                    #[cfg(target_os = "linux")]
                     Some("unset") => {
                         if let Err(e) = manager.remove_oneshot() {
                             log::error!("Unable to remove oneshot: {:#}", e)

@@ -131,7 +131,6 @@ impl Completer for RustylineHelper {
                 }],
             ));
         } else if pos < 5 && "unset".starts_with(line) {
-            #[cfg(target_os = "linux")]
             return Ok((
                 0,
                 vec![Pair {
@@ -139,8 +138,6 @@ impl Completer for RustylineHelper {
                     replacement: "unset".into(),
                 }],
             ));
-            #[cfg(not(target_os = "linux"))]
-            return Ok((0, vec![]));
         } else if pos < 4 && "exit".starts_with(line) {
             return Ok((
                 0,

@@ -148,7 +148,7 @@ impl Manager {
 
     #[cfg(target_os = "linux")]
     /// Removes the oneshot entry.
-    pub fn remove_oneshot(&self) -> Result<()> {
+    pub fn remove_oneshot(&mut self) -> Result<()> {
         use rustyline::completion::Candidate;
 
         use crate::attributes::FileAttributes;
@@ -177,6 +177,14 @@ impl Manager {
             Err(e) => Err(e)
                 .with_context(|| format!("Unable to remove a oneshot entry at {}", ONESHOT_PATH)),
         }
+    }
+
+    #[cfg(target_os = "windows")]
+    /// Removes the oneshot entry.
+    pub fn remove_oneshot(&mut self) -> Result<()> {
+        // On windows, to delete a variable one needs to set it to an empty
+        // (size = 0) value.
+        self.set_oneshot("")
     }
 
     /// Fetches the available entries.
