@@ -28,7 +28,3 @@ rustyline = "9.0.0"
 [target.'cfg(target_os = "linux")'.dependencies]
 # chattr
 libc = "0.2.105"
-
-[target.'cfg(target_os = "linux")'.build-dependencies]
-# Obtaining values of some linux-specific constants.
-cc = "1.0.71"

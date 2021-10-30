@@ -8,11 +8,73 @@ use std::{
 
 use anyhow::{Context, Result};
 
-extern "C" {
-    static FS_IOC_GETFLAGS_EXPORT: libc::c_ulong;
-    static FS_IOC_SETFLAGS_EXPORT: libc::c_ulong;
-    static FS_IMMUTABLE_FL_EXPORT: libc::c_int;
+#[derive(Debug, Clone, Copy)]
+enum Direction {
+    Write,
+    Read,
 }
+
+impl Direction {
+    const fn as_value(self) -> libc::c_ulong {
+        match self {
+            Direction::Write => 1,
+            Direction::Read => 2,
+        }
+    }
+}
+
+/// Creates an IOCTL request (command) from the given parameters.
+///
+/// See `ioctl.h` for implementation details.
+///
+/// # Arguments
+///
+/// * `direction`: is it "reading" or "writing" command?
+/// * `number`: number of the ioctl command.
+/// * `type_`: type of the ioctl command.
+const fn make_ioctl_request(
+    direction: Direction,
+    number: libc::c_ulong,
+    type_: libc::c_ulong,
+) -> libc::c_ulong {
+    // From `ioctl.h`:
+    //
+    // ioctl command encoding: 32 bits total, command in lower 16 bits, size of
+    // the parameter structure in the lower 14 bits of the upper 16 bits.
+    // Encoding the size of the parameter structure in the ioctl request is
+    // useful for catching programs compiled with old versions and to avoid
+    // overwriting user space outside the user buffer area. The highest 2 bits
+    // are reserved for indicating the ``access mode''.
+    //
+    // NOTE: This limits the max parameter size to 16kB -1 !
+
+    const NUMBER_SHIFT: libc::c_ulong = 0;
+    const NUMBER_BITS: libc::c_ulong = 8;
+
+    const TYPE_SHIFT: libc::c_ulong = NUMBER_BITS + NUMBER_SHIFT;
+    const TYPE_BITS: libc::c_ulong = 8;
+
+    const SIZE_SHIFT: libc::c_ulong = TYPE_SHIFT + TYPE_BITS;
+    const SIZE_BITS: libc::c_ulong = 14;
+
+    const DIRECTION_SHIFT: libc::c_ulong = SIZE_SHIFT + SIZE_BITS;
+
+    (direction.as_value() << DIRECTION_SHIFT)
+        | (type_ << TYPE_SHIFT)
+        | (number << NUMBER_SHIFT)
+        | ((std::mem::size_of::<libc::c_ulong>() as libc::c_ulong) << SIZE_SHIFT)
+}
+
+/// An IOCTL request to get inode flags.
+const FS_IOC_GETFLAGS: libc::c_ulong = make_ioctl_request(Direction::Read, 1, b'f' as u64);
+
+/// An IOCTL request to set inode flags.
+const FS_IOC_SETFLAGS: libc::c_ulong = make_ioctl_request(Direction::Write, 2, b'f' as u64);
+
+/// Inode flag "Immutable file".
+///
+/// See `linux/fs.h`.
+const FS_IMMUTABLE_FL: libc::c_int = 0x10;
 
 /// Sets the immutability back on drop.
 pub struct Guard {
@@ -25,7 +87,7 @@ impl Drop for Guard {
     fn drop(&mut self) {
         let fd = self.file.as_raw_fd();
 
-        if unsafe { libc::ioctl(fd, FS_IOC_SETFLAGS_EXPORT, &self.attr) } == -1 {
+        if unsafe { libc::ioctl(fd, FS_IOC_SETFLAGS, &self.attr) } == -1 {
             let error = std::io::Error::last_os_error();
             log::warn!(
                 "Unable make file {} immutable: {:#}",
@@ -56,21 +118,21 @@ where
     let fd = file.as_raw_fd();
 
     let mut original_attr: libc::c_int = 0;
-    if unsafe { libc::ioctl(fd, FS_IOC_GETFLAGS_EXPORT, &mut original_attr) } == -1 {
+    if unsafe { libc::ioctl(fd, FS_IOC_GETFLAGS, &mut original_attr) } == -1 {
         return Err(std::io::Error::last_os_error())
             .with_context(|| format!("Unable to obtain inode flags on {}", path.display()));
     }
     // Make the variable immutable.
     let original_attr = original_attr;
 
-    if original_attr & unsafe { FS_IMMUTABLE_FL_EXPORT } == 0 {
+    if original_attr & FS_IMMUTABLE_FL == 0 {
         // No immutable flag set, move along.
         return Ok(None);
     }
 
     // Switch off the immutability.
-    let new_attr = original_attr ^ unsafe { FS_IMMUTABLE_FL_EXPORT };
-    if unsafe { libc::ioctl(fd, FS_IOC_SETFLAGS_EXPORT, &new_attr) } == -1 {
+    let new_attr = original_attr ^ FS_IMMUTABLE_FL;
+    if unsafe { libc::ioctl(fd, FS_IOC_SETFLAGS, &new_attr) } == -1 {
         return Err(std::io::Error::last_os_error())
             .with_context(|| format!("Unable to switch off immutability of {}", path.display()));
     }

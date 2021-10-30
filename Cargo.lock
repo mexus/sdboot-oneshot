@@ -431,7 +431,6 @@ name = "sdboot-oneshot"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cc",
  "efivar",
  "fern",
  "libc",
