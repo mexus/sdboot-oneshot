@@ -10,6 +10,9 @@ mod error;
 mod read;
 mod write;
 
+#[cfg(target_os = "linux")]
+mod attributes;
+
 /// Vendor bytes from https://systemd.io/BOOT_LOADER_INTERFACE/
 const SYSTEMD_BOOT_VENDOR_RAW: Uuid = Uuid::from_bytes([
     0x4a, 0x67, 0xb0, 0x82, 0x0a, 0x4c, 0x41, 0xcf, 0xb6, 0xc7, 0x44, 0x0b, 0x29, 0xbb, 0x8c, 0x4f,
@@ -111,6 +114,22 @@ impl Manager {
     /// Sets value of the oneshot entry.
     pub fn set_oneshot(&mut self, value: &str) -> Result<()> {
         let flags = oneshot_entry_flags();
+
+        // On linux, we want to preserve the "immutable" extended attribute on
+        // the variable file, but we need to make it mutable to save the new
+        // value temporary.
+        #[cfg(target_os = "linux")]
+        let _guard = attributes::make_mutable(concat!(
+            // Path to the EFI variables storage on linux.
+            "/sys/firmware/efi/efivars/",
+            // Name of the EFI variable in question.
+            "LoaderEntryOneShot",
+            // Delimiter.
+            "-",
+            // SystemD vendor UUID.
+            "4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
+        ))?;
+
         write::write_utf16_string(&mut *self.inner, &self.oneshot_var, flags, value)
     }
 
