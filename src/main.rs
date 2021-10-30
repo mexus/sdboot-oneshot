@@ -1,4 +1,4 @@
-use std::{os::unix::prelude::AsRawFd, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use fern::colors::{Color, ColoredLevelConfig};
@@ -72,7 +72,17 @@ fn main() -> Result<()> {
     } = Args::from_args();
 
     let colorful_logs = match color_mode {
-        ColorMode::Auto => nix::unistd::isatty(std::io::stdout().as_raw_fd()).unwrap_or(false),
+        ColorMode::Auto => {
+            #[cfg(target_os = "linux")]
+            {
+                use std::os::unix::io::AsRawFd;
+                nix::unistd::isatty(std::io::stdout().as_raw_fd()).unwrap_or(false)
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                true
+            }
+        }
         ColorMode::On => true,
         ColorMode::Off => false,
     };

@@ -7,7 +7,7 @@ use efivar::{
 };
 use uuid::Uuid;
 
-use crate::{attributes, read, write};
+use crate::{read, write};
 
 /// Vendor bytes from https://systemd.io/BOOT_LOADER_INTERFACE/
 const SYSTEMD_BOOT_VENDOR_RAW: Uuid = Uuid::from_bytes([
@@ -127,7 +127,7 @@ impl Manager {
         // the variable file, but we need to make it mutable to save the new
         // value temporary.
         #[cfg(target_os = "linux")]
-        let _guard = attributes::temp_mutable(ONESHOT_PATH).with_context(|| {
+        let _guard = crate::attributes::temp_mutable(ONESHOT_PATH).with_context(|| {
             format!(
                 "Unable to remove immutability flag on file {}",
                 ONESHOT_PATH
