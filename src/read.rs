@@ -18,6 +18,13 @@ fn check_division() {
     assert_eq!(divide_up(15, 2), 8);
 }
 
+#[cfg(target_os = "windows")]
+fn is_envvar_not_found(e: &std::io::Error) -> bool {
+    /// "The system could not find the environment option that was entered"
+    const ERROR_ENVVAR_NOT_FOUND: i32 = 0xCB;
+    matches!(e.raw_os_error(), Some(ERROR_ENVVAR_NOT_FOUND))
+}
+
 /// Reads the value of the given EFI variable into a vector over [u16].
 pub fn read_u16_bytes<T: VarReader + ?Sized>(
     var_manager: &T,
@@ -38,6 +45,12 @@ pub fn read_u16_bytes<T: VarReader + ?Sized>(
                 break Ok(Some((buffer, flags)));
             }
             Err(efivar::Error::VarNotFound { .. }) => break Ok(None),
+            #[cfg(target_os = "windows")]
+            Err(efivar::Error::VarUnknownError { error, name: _ })
+                if is_envvar_not_found(&error) =>
+            {
+                break Ok(None);
+            }
             Err(efivar::Error::BufferTooSmall { .. }) => {
                 if buffer.len() >= MAX_BUFFER {
                     // Refuse to grow the buffer beyond MAX_BUFFER.
