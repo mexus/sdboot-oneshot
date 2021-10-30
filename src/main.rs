@@ -41,6 +41,11 @@ enum Command {
         /// New one shot entry name.
         entry: String,
     },
+
+    #[cfg(target_os = "linux")]
+    /// Removes the one shot entry.
+    Unset,
+
     /// Enter the interactive mode. Short alias is "i".
     #[structopt(alias = "i")]
     Interactive,
@@ -119,6 +124,8 @@ fn main() -> Result<()> {
                 )
             }
         }
+        #[cfg(target_os = "linux")]
+        Some(Command::Unset) => manager.remove_oneshot()?,
         Some(Command::Interactive) => {
             let mut editor = rustyline::Editor::new();
             editor.set_helper(Some(sdboot_oneshot::interactive::RustylineHelper::new(
@@ -148,6 +155,13 @@ fn main() -> Result<()> {
                 let mut input = input.split(char::is_whitespace).filter(|s| !s.is_empty());
                 match input.next() {
                     Some("set") => { /* No op */ }
+                    #[cfg(target_os = "linux")]
+                    Some("unset") => {
+                        if let Err(e) = manager.remove_oneshot() {
+                            log::error!("Unable to remove oneshot: {:#}", e)
+                        }
+                        continue;
+                    }
                     Some("exit") => {
                         // Graceful termination.
                         break;
@@ -168,7 +182,10 @@ fn main() -> Result<()> {
                         continue;
                     }
                 };
-                manager.set_oneshot(entry)?;
+                if let Err(e) = manager.set_oneshot(entry) {
+                    log::error!("Unable to set oneshot: {:#}", e);
+                    continue;
+                }
                 log::info!(r#"Oneshot entry set to "{}""#, entry);
                 if !entries.iter().any(|existing| existing == entry) {
                     log::warn!(

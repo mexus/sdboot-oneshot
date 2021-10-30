@@ -113,6 +113,11 @@ impl Completer for RustylineHelper {
                             display: "exit — exit the application".into(),
                             replacement: "exit".into(),
                         },
+                        #[cfg(target_os = "linux")]
+                        Pair {
+                            display: "unset — removes the oneshot entry".into(),
+                            replacement: "unset".into(),
+                        },
                     ],
                 ));
             }
@@ -125,6 +130,17 @@ impl Completer for RustylineHelper {
                     replacement: "set".into(),
                 }],
             ));
+        } else if pos < 5 && "unset".starts_with(line) {
+            #[cfg(target_os = "linux")]
+            return Ok((
+                0,
+                vec![Pair {
+                    display: "unset — removes the oneshot entry".into(),
+                    replacement: "unset".into(),
+                }],
+            ));
+            #[cfg(not(target_os = "linux"))]
+            return Ok((0, vec![]));
         } else if pos < 4 && "exit".starts_with(line) {
             return Ok((
                 0,
@@ -136,7 +152,7 @@ impl Completer for RustylineHelper {
         }
         match cmd {
             "set" => { /* No op */ }
-            "exit" => {
+            "unset" | "exit" => {
                 // No arguments expected
                 return Ok((0, vec![]));
             }
@@ -192,10 +208,5 @@ impl Completer for RustylineHelper {
 
         let _ = (line, pos, ctx);
         Ok((0, Vec::with_capacity(0)))
-    }
-
-    fn update(&self, line: &mut rustyline::line_buffer::LineBuffer, start: usize, elected: &str) {
-        let end = line.pos();
-        line.replace(start..end, elected)
     }
 }

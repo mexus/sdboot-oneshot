@@ -15,6 +15,9 @@ pub trait FileAttributes {
 
     /// Updates the inode flags.
     fn set_inode_flags(&self, flags: libc::c_long) -> nix::Result<()>;
+
+    /// Sets or unsets the "immutable" flag.
+    fn set_immutable(&self, immutable: bool) -> nix::Result<()>;
 }
 
 impl FileAttributes for File {
@@ -29,6 +32,21 @@ impl FileAttributes for File {
         // Safety: the ioctl request is set up correctly.
         unsafe { set_inode_flags(self.as_raw_fd(), &flags) }?;
         Ok(())
+    }
+
+    fn set_immutable(&self, immutable: bool) -> nix::Result<()> {
+        let flags = self.inode_flags()?;
+        let flags = match (flags & FS_IMMUTABLE_FL == FS_IMMUTABLE_FL, immutable) {
+            (true, true) | (false, false) => {
+                // Nothing to do.
+                return Ok(());
+            }
+            (true, false) | (false, true) => {
+                // Need to switch the flag
+                flags ^ FS_IMMUTABLE_FL
+            }
+        };
+        self.set_inode_flags(flags)
     }
 }
 
@@ -79,7 +97,7 @@ impl Drop for Guard {
 /// hence the file wouldn't become immutable afterwards.
 ///
 /// For explanation on immutability see `man 1 chattr`.
-pub fn make_mutable<P>(path: P) -> Result<Option<Guard>>
+pub fn temp_mutable<P>(path: P) -> Result<Option<Guard>>
 where
     P: AsRef<Path>,
 {

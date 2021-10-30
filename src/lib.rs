@@ -67,6 +67,18 @@ fn oneshot_entry_flags() -> VariableFlags {
     VariableFlags::NON_VOLATILE | VariableFlags::BOOTSERVICE_ACCESS | VariableFlags::RUNTIME_ACCESS
 }
 
+#[cfg(target_os = "linux")]
+const ONESHOT_PATH: &str = concat!(
+    // Path to the EFI variables storage on linux.
+    "/sys/firmware/efi/efivars/",
+    // Name of the EFI variable in question.
+    "LoaderEntryOneShot",
+    // Delimiter.
+    "-",
+    // SystemD vendor UUID.
+    "4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
+);
+
 impl Manager {
     /// Initializes the manager.
     pub fn new() -> Self {
@@ -120,21 +132,47 @@ impl Manager {
         // the variable file, but we need to make it mutable to save the new
         // value temporary.
         #[cfg(target_os = "linux")]
-        let path = concat!(
-            // Path to the EFI variables storage on linux.
-            "/sys/firmware/efi/efivars/",
-            // Name of the EFI variable in question.
-            "LoaderEntryOneShot",
-            // Delimiter.
-            "-",
-            // SystemD vendor UUID.
-            "4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
-        );
-        #[cfg(target_os = "linux")]
-        let _guard = attributes::make_mutable(path)
-            .with_context(|| format!("Unable to remove immutability flag on file {}", path))?;
+        let _guard = attributes::temp_mutable(ONESHOT_PATH).with_context(|| {
+            format!(
+                "Unable to remove immutability flag on file {}",
+                ONESHOT_PATH
+            )
+        })?;
 
         write::write_utf16_string(&mut *self.inner, &self.oneshot_var, flags, value)
+    }
+
+    #[cfg(target_os = "linux")]
+    /// Removes the oneshot entry.
+    pub fn remove_oneshot(&self) -> Result<()> {
+        use rustyline::completion::Candidate;
+
+        use crate::attributes::FileAttributes;
+
+        match std::fs::File::open(ONESHOT_PATH) {
+            Ok(file) => file.set_immutable(false).with_context(|| {
+                format!(
+                    "Unable to make oneshot file {} non-immutable",
+                    ONESHOT_PATH.display()
+                )
+            })?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // No file => nothing to delete => success.
+            }
+            Err(e) => {
+                return Err(e)
+                    .with_context(|| format!("Unable to open a oneshot entry at {}", ONESHOT_PATH))
+            }
+        };
+        match std::fs::remove_file(ONESHOT_PATH) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // File disappeared => nothing to delete => success.
+                Ok(())
+            }
+            Err(e) => Err(e)
+                .with_context(|| format!("Unable to remove a oneshot entry at {}", ONESHOT_PATH)),
+        }
     }
 
     /// Fetches the available entries.
