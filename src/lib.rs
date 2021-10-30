@@ -39,6 +39,19 @@ const ONESHOT_ENTRY_SHORT: &str = "LoaderEntryOneShot";
 /// (c) https://systemd.io/BOOT_LOADER_INTERFACE/
 const LOADER_ENTRIES_SHORT: &str = "LoaderEntries";
 
+/// The EFI variable LoaderEntrySelected contains the boot loader entry
+/// identifier that was booted. It is set by the boot loader and read by the OS
+/// in order to identify which entry has been used for the current boot.
+///
+/// (c) https://systemd.io/BOOT_LOADER_INTERFACE/
+const LOADER_ENTRY_SELECTED: &str = "LoaderEntrySelected";
+
+/// The EFI variable LoaderEntryDefault contains the default boot loader entry
+/// to use. It contains a NUL-terminated boot loader entry identifier.
+///
+/// (c) https://systemd.io/BOOT_LOADER_INTERFACE/
+const LOADER_ENTRY_DEFAULT: &str = "LoaderEntryDefault";
+
 /// Systemd-boot entries manager.
 pub struct Manager {
     inner: Box<dyn VarManager>,
@@ -57,6 +70,25 @@ impl Manager {
             inner: efivar::system(),
             oneshot_var: VariableName::new_with_vendor(ONESHOT_ENTRY_SHORT, SYSTEMD_BOOT_VENDOR),
         }
+    }
+
+    fn get_string(&self, var_name: &str) -> Result<String> {
+        let (value, _flags) = read::read_utf16_string(
+            &*self.inner,
+            &VariableName::new_with_vendor(var_name, SYSTEMD_BOOT_VENDOR),
+        )?
+        .with_context(|| format!("Variable {} is not set", var_name))?;
+        Ok(value)
+    }
+
+    /// Returns the entry that was currently booted.
+    pub fn get_entry_selected(&self) -> Result<String> {
+        self.get_string(LOADER_ENTRY_SELECTED)
+    }
+
+    /// Returns the default entry.
+    pub fn get_default_entry(&self) -> Result<String> {
+        self.get_string(LOADER_ENTRY_DEFAULT)
     }
 
     /// Fetches the current oneshot entry value.
