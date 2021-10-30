@@ -8,87 +8,59 @@ use std::{
 
 use anyhow::{Context, Result};
 
-#[derive(Debug, Clone, Copy)]
-enum Direction {
-    Write,
-    Read,
+/// A [File] extension trait to allow immutability manipulations.
+pub trait FileAttributes {
+    /// Returns the currently set inode flags.
+    fn inode_flags(&self) -> nix::Result<libc::c_long>;
+
+    /// Updates the inode flags.
+    fn set_inode_flags(&self, flags: libc::c_long) -> nix::Result<()>;
 }
 
-impl Direction {
-    const fn as_value(self) -> libc::c_ulong {
-        match self {
-            Direction::Write => 1,
-            Direction::Read => 2,
-        }
+impl FileAttributes for File {
+    fn inode_flags(&self) -> nix::Result<libc::c_long> {
+        let mut flags = 0;
+        // Safety: the ioctl request is set up correctly.
+        unsafe { get_inode_flags(self.as_raw_fd(), &mut flags) }?;
+        Ok(flags)
+    }
+
+    fn set_inode_flags(&self, flags: libc::c_long) -> nix::Result<()> {
+        // Safety: the ioctl request is set up correctly.
+        unsafe { set_inode_flags(self.as_raw_fd(), &flags) }?;
+        Ok(())
     }
 }
-
-/// Creates an IOCTL request (command) from the given parameters.
-///
-/// See `ioctl.h` for implementation details.
-///
-/// # Arguments
-///
-/// * `direction`: is it "reading" or "writing" command?
-/// * `number`: number of the ioctl command.
-/// * `type_`: type of the ioctl command.
-const fn make_ioctl_request(
-    direction: Direction,
-    number: libc::c_ulong,
-    type_: libc::c_ulong,
-) -> libc::c_ulong {
-    // From `ioctl.h`:
-    //
-    // ioctl command encoding: 32 bits total, command in lower 16 bits, size of
-    // the parameter structure in the lower 14 bits of the upper 16 bits.
-    // Encoding the size of the parameter structure in the ioctl request is
-    // useful for catching programs compiled with old versions and to avoid
-    // overwriting user space outside the user buffer area. The highest 2 bits
-    // are reserved for indicating the ``access mode''.
-    //
-    // NOTE: This limits the max parameter size to 16kB -1 !
-
-    const NUMBER_SHIFT: libc::c_ulong = 0;
-    const NUMBER_BITS: libc::c_ulong = 8;
-
-    const TYPE_SHIFT: libc::c_ulong = NUMBER_BITS + NUMBER_SHIFT;
-    const TYPE_BITS: libc::c_ulong = 8;
-
-    const SIZE_SHIFT: libc::c_ulong = TYPE_SHIFT + TYPE_BITS;
-    const SIZE_BITS: libc::c_ulong = 14;
-
-    const DIRECTION_SHIFT: libc::c_ulong = SIZE_SHIFT + SIZE_BITS;
-
-    (direction.as_value() << DIRECTION_SHIFT)
-        | (type_ << TYPE_SHIFT)
-        | (number << NUMBER_SHIFT)
-        | ((std::mem::size_of::<libc::c_ulong>() as libc::c_ulong) << SIZE_SHIFT)
-}
-
-/// An IOCTL request to get inode flags.
-const FS_IOC_GETFLAGS: libc::c_ulong = make_ioctl_request(Direction::Read, 1, b'f' as u64);
-
-/// An IOCTL request to set inode flags.
-const FS_IOC_SETFLAGS: libc::c_ulong = make_ioctl_request(Direction::Write, 2, b'f' as u64);
 
 /// Inode flag "Immutable file".
 ///
 /// See `linux/fs.h`.
-const FS_IMMUTABLE_FL: libc::c_int = 0x10;
+const FS_IMMUTABLE_FL: i64 = 0x10;
 
 /// Sets the immutability back on drop.
 pub struct Guard {
-    attr: libc::c_int,
-    file: File,
+    attr: i64,
     path: PathBuf,
 }
 
+nix::ioctl_read!(get_inode_flags, b'f', 1, libc::c_long);
+nix::ioctl_write_ptr!(set_inode_flags, b'f', 2, libc::c_long);
+
 impl Drop for Guard {
     fn drop(&mut self) {
-        let fd = self.file.as_raw_fd();
+        let file = match std::fs::File::open(&self.path) {
+            Ok(file) => file,
+            Err(e) => {
+                log::warn!(
+                    "Unable to open file {} to make it immutable: {:#}",
+                    self.path.display(),
+                    e
+                );
+                return;
+            }
+        };
 
-        if unsafe { libc::ioctl(fd, FS_IOC_SETFLAGS, &self.attr) } == -1 {
-            let error = std::io::Error::last_os_error();
+        if let Err(error) = file.set_inode_flags(self.attr) {
             log::warn!(
                 "Unable make file {} immutable: {:#}",
                 self.path.display(),
@@ -113,17 +85,22 @@ where
 {
     let path = path.as_ref();
 
-    let file =
-        File::open(path).with_context(|| format!(r#"Unable to open path "{}""#, path.display()))?;
-    let fd = file.as_raw_fd();
-
-    let mut original_attr: libc::c_int = 0;
-    if unsafe { libc::ioctl(fd, FS_IOC_GETFLAGS, &mut original_attr) } == -1 {
-        return Err(std::io::Error::last_os_error())
-            .with_context(|| format!("Unable to obtain inode flags on {}", path.display()));
+    let file = match File::open(path) {
+        Ok(file) => Ok(file),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // It's okay that the file doesn't exist. It will be created when
+            // the respective EFI variable is set.
+            let guard = Guard {
+                attr: FS_IMMUTABLE_FL,
+                path: path.to_owned(),
+            };
+            return Ok(Some(guard));
+        }
+        Err(e) => Err(e),
     }
-    // Make the variable immutable.
-    let original_attr = original_attr;
+    .context("Unable to open the file")?;
+
+    let original_attr = file.inode_flags().context("Unable to obtain inode flags")?;
 
     if original_attr & FS_IMMUTABLE_FL == 0 {
         // No immutable flag set, move along.
@@ -132,15 +109,15 @@ where
 
     // Switch off the immutability.
     let new_attr = original_attr ^ FS_IMMUTABLE_FL;
-    if unsafe { libc::ioctl(fd, FS_IOC_SETFLAGS, &new_attr) } == -1 {
-        return Err(std::io::Error::last_os_error())
-            .with_context(|| format!("Unable to switch off immutability of {}", path.display()));
-    }
+    file.set_inode_flags(new_attr)
+        .context("Unable to switch off immutability")?;
+
+    drop(file);
+
     log::debug!("Immutable flag removed from file {}", path.display());
 
     let guard = Guard {
         attr: original_attr,
-        file,
         path: path.to_owned(),
     };
 

@@ -120,7 +120,7 @@ impl Manager {
         // the variable file, but we need to make it mutable to save the new
         // value temporary.
         #[cfg(target_os = "linux")]
-        let _guard = attributes::make_mutable(concat!(
+        let path = concat!(
             // Path to the EFI variables storage on linux.
             "/sys/firmware/efi/efivars/",
             // Name of the EFI variable in question.
@@ -129,7 +129,10 @@ impl Manager {
             "-",
             // SystemD vendor UUID.
             "4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
-        ))?;
+        );
+        #[cfg(target_os = "linux")]
+        let _guard = attributes::make_mutable(path)
+            .with_context(|| format!("Unable to remove immutability flag on file {}", path))?;
 
         write::write_utf16_string(&mut *self.inner, &self.oneshot_var, flags, value)
     }

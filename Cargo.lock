@@ -435,6 +435,7 @@ dependencies = [
  "fern",
  "libc",
  "log",
+ "nix",
  "rustyline",
  "structopt",
  "uuid",

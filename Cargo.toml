@@ -25,6 +25,9 @@ structopt = "0.3.25"
 # CLI (interactive)
 rustyline = "9.0.0"
 
+# for ioctl. version is set in accordance with rustyline.
+nix = "0.22"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 # chattr
 libc = "0.2.105"
