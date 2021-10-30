@@ -1,0 +1,26 @@
+[package]
+name = "sdboot-oneshot"
+version = "0.1.0"
+edition = "2021"
+description = "Systemd-boot oneshot entries manager"
+license = "Apache-2.0/MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# working with EFI variables
+efivar = "0.2.1"
+uuid = "0.8.2"
+
+# logging
+log = "0.4.14"
+fern = "0.6.0"
+
+# error handling
+anyhow = "1.0.44"
+
+# chattr
+libc = "0.2.105"
+
+# CLI
+structopt = "0.3.25"
