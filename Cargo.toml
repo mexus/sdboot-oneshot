@@ -28,6 +28,12 @@ rustyline = "9.0.0"
 # for ioctl. version is set in accordance with rustyline.
 nix = "0.22"
 
+# Storing entries
+once_cell = "1.8.0"
+
+# GUI
+iced = "0.3.0"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 # chattr
 libc = "0.2.105"

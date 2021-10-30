@@ -1,5 +1,7 @@
 //! Interactive mode helper.
 
+use std::sync::Arc;
+
 use rustyline::{
     completion::{Completer, Pair},
     highlight::Highlighter,
@@ -10,12 +12,12 @@ use rustyline::{
 
 /// A [Helper] implementation.
 pub struct RustylineHelper {
-    entries: Vec<String>,
+    entries: Arc<[String]>,
 }
 
 impl RustylineHelper {
     /// Creates a new helper from the given entries.
-    pub fn new(entries: Vec<String>) -> Self {
+    pub fn new(entries: Arc<[String]>) -> Self {
         Self { entries }
     }
 }

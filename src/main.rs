@@ -1,8 +1,9 @@
-use std::os::unix::prelude::AsRawFd;
+use std::{os::unix::prelude::AsRawFd, sync::Arc};
 
 use anyhow::{Context, Result};
 use fern::colors::{Color, ColoredLevelConfig};
-use sdboot_oneshot::Manager;
+use iced::Application;
+use sdboot_oneshot::{GuiApplication, Manager};
 use structopt::{clap::arg_enum, StructOpt};
 
 arg_enum! {
@@ -48,6 +49,19 @@ enum Command {
     /// Enter the interactive mode. Short alias is "i".
     #[structopt(alias = "i")]
     Interactive,
+
+    /// Launch graphical user interface. Short alias is "g".
+    #[structopt(alias = "g")]
+    Gui,
+}
+
+fn load_entries(manager: &Manager) -> Result<Arc<[String]>> {
+    use once_cell::sync::OnceCell;
+    static ENTRIES: OnceCell<Arc<[String]>> = OnceCell::new();
+
+    ENTRIES
+        .get_or_try_init(|| manager.entries().map(Arc::from))
+        .map(Arc::clone)
 }
 
 fn main() -> Result<()> {
@@ -87,6 +101,9 @@ fn main() -> Result<()> {
         .format(formatter)
         .level(if verbose {
             log::LevelFilter::Debug
+        } else if cfg!(windows) && matches!(command, Some(Command::Gui)) {
+            // Do not log anything on windows when in GUI mode.
+            log::LevelFilter::Off
         } else {
             log::LevelFilter::Info
         })
@@ -96,23 +113,26 @@ fn main() -> Result<()> {
 
     let mut manager = Manager::new();
 
-    log::info!(r#"Default entry: "{}""#, manager.get_default_entry()?);
-    log::info!(r#"Currently booted: "{}""#, manager.get_selected_entry()?);
+    if !matches!(command, Some(Command::Gui)) {
+        log::info!(r#"Default entry: "{}""#, manager.get_default_entry()?);
+        log::info!(r#"Currently booted: "{}""#, manager.get_selected_entry()?);
 
-    if let Some(current_oneshot_entry) = manager.get_oneshot()? {
-        log::info!(
-            r#"One shot is currently set to "{}""#,
-            current_oneshot_entry
-        );
-    } else {
-        log::info!(r#"One shot is currently not set"#);
+        if let Some(current_oneshot_entry) = manager.get_oneshot()? {
+            log::info!(
+                r#"One shot is currently set to "{}""#,
+                current_oneshot_entry
+            );
+        } else {
+            log::info!(r#"One shot is currently not set"#);
+        }
+
+        let entries = load_entries(&manager)?;
+        log::info!("Discovered {} entries: {:#?}", entries.len(), entries);
     }
-
-    let entries = manager.entries()?;
-    log::info!("Discovered {} entries: {:#?}", entries.len(), entries);
 
     match command {
         Some(Command::Set { entry }) => {
+            let entries = load_entries(&manager)?;
             manager.set_oneshot(&entry)?;
             log::info!(r#"Oneshot entry set to "{}""#, entry);
             if !entries.contains(&entry) {
@@ -124,9 +144,10 @@ fn main() -> Result<()> {
         }
         Some(Command::Unset) => manager.remove_oneshot()?,
         Some(Command::Interactive) => {
+            let entries = load_entries(&manager)?;
             let mut editor = rustyline::Editor::new();
             editor.set_helper(Some(sdboot_oneshot::interactive::RustylineHelper::new(
-                entries.clone(),
+                entries,
             )));
 
             let prompt = if colorful_logs {
@@ -181,13 +202,25 @@ fn main() -> Result<()> {
                     continue;
                 }
                 log::info!(r#"Oneshot entry set to "{}""#, entry);
-                if !entries.iter().any(|existing| existing == entry) {
-                    log::warn!(
-                        r#"Please note that there is no entry detected with the name "{}"!"#,
-                        entry
-                    );
-                }
+                match load_entries(&manager) {
+                    Ok(entries) => {
+                        if !entries.iter().any(|existing| existing == entry) {
+                            log::warn!(
+                                r#"Please note that there is no entry detected with the name "{}"!"#,
+                                entry
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!("Unable to load available entries: {:#}", e);
+                    }
+                };
             }
+        }
+        Some(Command::Gui) => {
+            let mut settings = iced::Settings::default();
+            settings.window.size = (600, 300);
+            GuiApplication::run(settings).context("Running GUI application")?;
         }
         None => { /* No op */ }
     }
