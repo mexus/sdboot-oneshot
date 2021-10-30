@@ -22,6 +22,9 @@ anyhow = "1.0.44"
 # CLI
 structopt = "0.3.25"
 
+# CLI (interactive)
+rustyline = "9.0.0"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 # chattr
 libc = "0.2.105"

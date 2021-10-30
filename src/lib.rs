@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 mod array_ext;
 mod error;
+pub mod interactive;
 mod read;
 mod write;
 
