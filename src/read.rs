@@ -22,7 +22,7 @@ fn check_division() {
 pub fn read_u16_bytes<T: VarReader + ?Sized>(
     var_manager: &T,
     name: &VariableName,
-) -> Result<(Vec<u16>, VariableFlags)> {
+) -> Result<Option<(Vec<u16>, VariableFlags)>> {
     // 8 MBs (when applied to u16).
     const MAX_BUFFER: usize = 8 * 512 * 1024;
 
@@ -35,8 +35,9 @@ pub fn read_u16_bytes<T: VarReader + ?Sized>(
                 // twice as short. If read odd number of bytes, add an extra u16
                 // on top of the halved value.
                 buffer.resize(divide_up(length, 2), 0);
-                break Ok((buffer, flags));
+                break Ok(Some((buffer, flags)));
             }
+            Err(efivar::Error::VarNotFound { .. }) => break Ok(None),
             Err(efivar::Error::BufferTooSmall { .. }) => {
                 if buffer.len() >= MAX_BUFFER {
                     // Refuse to grow the buffer beyond MAX_BUFFER.
@@ -60,9 +61,12 @@ pub fn read_u16_bytes<T: VarReader + ?Sized>(
 pub fn read_utf16_string<T: VarReader + ?Sized>(
     var_manager: &T,
     name: &VariableName,
-) -> Result<(String, VariableFlags)> {
-    let (bytes, flags) = read_u16_bytes(var_manager, name)?;
+) -> Result<Option<(String, VariableFlags)>> {
+    let (bytes, flags) = match read_u16_bytes(var_manager, name)? {
+        Some(data) => data,
+        None => return Ok(None),
+    };
     let value = String::from_utf16(&bytes)
         .with_context(|| format!("Non-UTF16 value: {}", String::from_utf16_lossy(&bytes)))?;
-    Ok((value, flags))
+    Ok(Some((value, flags)))
 }

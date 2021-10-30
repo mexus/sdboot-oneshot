@@ -1,6 +1,4 @@
-use std::cell::Cell;
-
-use anyhow::Result;
+use anyhow::{Context, Result};
 use efivar::{
     efi::{VariableFlags, VariableName, VariableVendor},
     VarManager,
@@ -45,7 +43,11 @@ const LOADER_ENTRIES_SHORT: &str = "LoaderEntries";
 pub struct Manager {
     inner: Box<dyn VarManager>,
     oneshot_var: VariableName,
-    oneshot_flags: Cell<Option<VariableFlags>>,
+}
+
+// Flags on the oneshot entry EFI variable.
+fn oneshot_entry_flags() -> VariableFlags {
+    VariableFlags::NON_VOLATILE | VariableFlags::BOOTSERVICE_ACCESS | VariableFlags::RUNTIME_ACCESS
 }
 
 impl Manager {
@@ -54,32 +56,29 @@ impl Manager {
         Self {
             inner: efivar::system(),
             oneshot_var: VariableName::new_with_vendor(ONESHOT_ENTRY_SHORT, SYSTEMD_BOOT_VENDOR),
-            oneshot_flags: Cell::new(None),
         }
     }
 
-    /// Loads contents of the oneshot EFI variable and its associated flags.
-    fn load_oneshot(&self) -> Result<(String, VariableFlags)> {
-        read::read_utf16_string(&*self.inner, &self.oneshot_var)
-    }
-
     /// Fetches the current oneshot entry value.
-    pub fn get_oneshot(&self) -> Result<String> {
-        let (value, flags) = self.load_oneshot()?;
-        self.oneshot_flags.set(Some(flags));
-        Ok(value)
+    pub fn get_oneshot(&self) -> Result<Option<String>> {
+        let (value, flags) = match read::read_utf16_string(&*self.inner, &self.oneshot_var)? {
+            Some(data) => data,
+            None => return Ok(None),
+        };
+
+        let expected_flags = oneshot_entry_flags();
+        anyhow::ensure!(
+            flags == expected_flags,
+            "Flags on the oneshot entry ({:?}) differs from expected ({:?})!",
+            flags,
+            expected_flags
+        );
+        Ok(Some(value))
     }
 
     /// Sets value of the oneshot entry.
     pub fn set_oneshot(&mut self, value: &str) -> Result<()> {
-        let flags = match self.oneshot_flags.get() {
-            None => {
-                let (_, flags) = self.load_oneshot()?;
-                self.oneshot_flags.set(Some(flags));
-                flags
-            }
-            Some(flags) => flags,
-        };
+        let flags = oneshot_entry_flags();
         write::write_utf16_string(&mut *self.inner, &self.oneshot_var, flags, value)
     }
 
@@ -88,7 +87,8 @@ impl Manager {
         let (entries_bytes, _flags) = read::read_u16_bytes(
             &*self.inner,
             &VariableName::new_with_vendor(LOADER_ENTRIES_SHORT, SYSTEMD_BOOT_VENDOR),
-        )?;
+        )?
+        .with_context(|| format!(r#"Variable {} is not set"#, LOADER_ENTRIES_SHORT))?;
         Ok(entries_bytes
             .split(|&byte| byte == 0)
             .take_while(|entry| {

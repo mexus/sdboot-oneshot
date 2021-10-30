@@ -40,8 +40,14 @@ fn main() -> Result<()> {
 
     let manager = Manager::new();
 
-    let current_oneshot_entry = manager.get_oneshot()?;
-    log::info!("One shot is currently set to '{}'", current_oneshot_entry);
+    if let Some(current_oneshot_entry) = manager.get_oneshot()? {
+        log::info!(
+            r#"One shot is currently set to "{}""#,
+            current_oneshot_entry
+        );
+    } else {
+        log::info!(r#"One shot is currently not set"#);
+    }
 
     let entries = manager.entries()?;
     log::info!("Discovered {} entries: {:#?}", entries.len(), entries);
@@ -49,7 +55,13 @@ fn main() -> Result<()> {
     if let Some(new_oneshot) = new_oneshot {
         let mut manager = manager;
         manager.set_oneshot(&new_oneshot)?;
-        log::info!("Oneshot entry set to {}", new_oneshot);
+        log::info!(r#"Oneshot entry set to "{}""#, new_oneshot);
+        if !entries.contains(&new_oneshot) {
+            log::warn!(
+                r#"Please note that there is no entry detected with the name "{}"!"#,
+                new_oneshot
+            )
+        }
     }
     Ok(())
 }
