@@ -1,6 +1,18 @@
+use std::os::unix::prelude::AsRawFd;
+
 use anyhow::{Context, Result};
+use fern::colors::{Color, ColoredLevelConfig};
 use sdboot_oneshot::Manager;
-use structopt::StructOpt;
+use structopt::{clap::arg_enum, StructOpt};
+
+arg_enum! {
+    #[derive(PartialEq, Debug)]
+    pub enum ColorMode {
+        Auto,
+        On,
+        Off,
+    }
+}
 
 /// A simple utility to manage systemd-boot oneshot entry.
 #[derive(Debug, StructOpt)]
@@ -8,6 +20,14 @@ struct Args {
     /// Be verbose.
     #[structopt(long, short)]
     verbose: bool,
+
+    /// Set the color mode.
+    #[structopt(
+        long = "color", default_value = "auto",
+        possible_values = &ColorMode::variants(),
+        case_insensitive = true,
+    )]
+    color_mode: ColorMode,
 
     #[structopt(subcommand)]
     command: Option<Command>,
@@ -27,17 +47,40 @@ enum Command {
 }
 
 fn main() -> Result<()> {
-    let Args { verbose, command } = Args::from_args();
+    let Args {
+        verbose,
+        command,
+        color_mode,
+    } = Args::from_args();
 
-    fern::Dispatch::new()
-        .format(|out, message, record| {
+    let colorful_logs = match color_mode {
+        ColorMode::Auto => nix::unistd::isatty(std::io::stdout().as_raw_fd()).unwrap_or(false),
+        ColorMode::On => true,
+        ColorMode::Off => false,
+    };
+
+    let colors = ColoredLevelConfig::new()
+        .info(Color::Green)
+        .debug(Color::Cyan);
+    let formatter: Box<
+        dyn Fn(fern::FormatCallback, &std::fmt::Arguments, &log::Record) + Sync + Send,
+    > = if colorful_logs {
+        Box::new(move |out, message, record| {
             out.finish(format_args!(
-                "[{}][{}] {}",
-                record.target(),
-                record.level(),
-                message
+                "{color_line}{message}\x1B[0m",
+                color_line =
+                    format_args!("\x1B[{}m", colors.get_color(&record.level()).to_fg_str()),
+                message = message
             ))
         })
+    } else {
+        Box::new(|out, message, record| {
+            out.finish(format_args!("[{}] {}", record.level(), message))
+        })
+    };
+
+    fern::Dispatch::new()
+        .format(formatter)
         .level(if verbose {
             log::LevelFilter::Debug
         } else {
@@ -79,12 +122,21 @@ fn main() -> Result<()> {
         Some(Command::Interactive) => {
             let mut editor = rustyline::Editor::new();
             editor.set_helper(Some(sdboot_oneshot::interactive::RustylineHelper::new(
-                entries,
+                entries.clone(),
             )));
 
             let mut manager = manager;
+
+            let prompt = if colorful_logs {
+                format!(
+                    "{color}>>\x1B[0m ",
+                    color = format_args!("\x1B[{}m", Color::BrightGreen.to_fg_str())
+                )
+            } else {
+                ">> ".to_owned()
+            };
             loop {
-                let input = match editor.readline(">> ") {
+                let input = match editor.readline(&prompt) {
                     Ok(input) => input,
                     Err(rustyline::error::ReadlineError::Eof) => {
                         // Graceful termination
@@ -101,23 +153,29 @@ fn main() -> Result<()> {
                         break;
                     }
                     Some(cmd) => {
-                        println!(r#"Unknown command "{}""#, cmd);
+                        log::warn!(r#"Unknown command "{}""#, cmd);
                         continue;
                     }
                     None => {
-                        println!("No command specified");
+                        log::warn!("No command specified");
                         continue;
                     }
                 }
                 let entry = match input.next() {
                     Some(entry) => entry,
                     None => {
-                        println!("No entry specified");
+                        log::warn!("No entry specified");
                         continue;
                     }
                 };
                 manager.set_oneshot(entry)?;
                 log::info!(r#"Oneshot entry set to "{}""#, entry);
+                if !entries.iter().any(|existing| existing == entry) {
+                    log::warn!(
+                        r#"Please note that there is no entry detected with the name "{}"!"#,
+                        entry
+                    );
+                }
             }
         }
         None => { /* No op */ }
