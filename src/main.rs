@@ -98,7 +98,7 @@ fn main() -> Result<()> {
     let manager = Manager::new();
 
     log::info!(r#"Default entry: "{}""#, manager.get_default_entry()?);
-    log::info!(r#"Currently booted: "{}""#, manager.get_entry_selected()?);
+    log::info!(r#"Currently booted: "{}""#, manager.get_selected_entry()?);
 
     if let Some(current_oneshot_entry) = manager.get_oneshot()? {
         log::info!(

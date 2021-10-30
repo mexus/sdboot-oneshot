@@ -1,3 +1,7 @@
+//! systemd-boot EFI variables manipulation library.
+
+#![deny(missing_docs)]
+
 use anyhow::{Context, Result};
 use efivar::{
     efi::{VariableFlags, VariableName, VariableVendor},
@@ -98,7 +102,7 @@ impl Manager {
     }
 
     /// Returns the entry that was currently booted.
-    pub fn get_entry_selected(&self) -> Result<String> {
+    pub fn get_selected_entry(&self) -> Result<String> {
         self.get_string(LOADER_ENTRY_SELECTED)
     }
 
