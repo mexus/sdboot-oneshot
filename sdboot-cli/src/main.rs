@@ -150,7 +150,10 @@ fn main() -> Result<()> {
                 )
             }
         }
-        Some(Command::Unset) => manager.remove_oneshot()?,
+        Some(Command::Unset) => {
+            manager.remove_oneshot()?;
+            log::info!("Oneshot entry unset");
+        }
         Some(Command::Interactive) => {
             let mut editor = rustyline::Editor::new();
             editor.set_helper(Some(RustylineHelper::new(entries.clone())));
