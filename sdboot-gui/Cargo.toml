@@ -1,0 +1,23 @@
+[package]
+name = "sdboot-gui"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# the main library
+sdboot = { path = "../sdboot" }
+
+# GUI
+iced = "0.3.0"
+
+# CLI
+structopt = "0.3.25"
+
+# logging
+log = "0.4.14"
+fern = "0.6.0"
+
+# error handling
+anyhow = "1.0.44"

@@ -1,7 +1,5 @@
 //! Interactive mode helper.
 
-use std::sync::Arc;
-
 use rustyline::{
     completion::{Completer, Pair},
     highlight::Highlighter,
@@ -12,12 +10,17 @@ use rustyline::{
 
 /// A [Helper] implementation.
 pub struct RustylineHelper {
-    entries: Arc<[String]>,
+    entries: Vec<String>,
 }
 
 impl RustylineHelper {
     /// Creates a new helper from the given entries.
-    pub fn new(entries: Arc<[String]>) -> Self {
+    pub fn new<Entries>(entries: Entries) -> Self
+    where
+        Entries: IntoIterator,
+        Entries::Item: Into<String>,
+    {
+        let entries = entries.into_iter().map(Into::into).collect::<Vec<_>>();
         Self { entries }
     }
 }
@@ -68,26 +71,6 @@ fn split_position(line: &str) -> SplitPosition<'_> {
         last_position: 0,
         line,
     }
-}
-
-#[test]
-fn check_split() {
-    let input = "set kek  löl    something-something";
-    let mut iter = split_position(input);
-    assert_eq!(Some((0, "set")), iter.next());
-    assert_eq!(Some((4, "kek")), iter.next());
-    assert_eq!(Some((8, "")), iter.next());
-    assert_eq!(Some((9, "löl")), iter.next());
-    assert_eq!(Some((14, "")), iter.next()); // "ö" contains two bytes, hence 14, not 13.
-    assert_eq!(Some((15, "")), iter.next());
-    assert_eq!(Some((16, "")), iter.next());
-    assert_eq!(Some((17, "something-something")), iter.next());
-    assert_eq!(None, iter.next());
-
-    let input = "set ";
-    let mut iter = split_position(input);
-    assert_eq!(Some((0, "set")), iter.next());
-    assert_eq!(None, iter.next());
 }
 
 impl Completer for RustylineHelper {
@@ -171,8 +154,8 @@ impl Completer for RustylineHelper {
                         self.entries
                             .iter()
                             .map(|entry| Pair {
-                                display: entry.clone(),
-                                replacement: entry.clone(),
+                                display: entry.into(),
+                                replacement: entry.into(),
                             })
                             .collect(),
                     ));
@@ -184,8 +167,8 @@ impl Completer for RustylineHelper {
                             .iter()
                             .filter(|entry| entry.starts_with(partial_entry))
                             .map(|entry| Pair {
-                                display: entry.clone(),
-                                replacement: entry.clone(),
+                                display: entry.into(),
+                                replacement: entry.into(),
                             })
                             .collect(),
                     ));
@@ -198,7 +181,7 @@ impl Completer for RustylineHelper {
                 self.entries
                     .iter()
                     .map(|entry| Pair {
-                        display: entry.clone(),
+                        display: entry.into(),
                         replacement: format!(" {}", entry),
                     })
                     .collect(),
@@ -207,5 +190,30 @@ impl Completer for RustylineHelper {
 
         let _ = (line, pos, ctx);
         Ok((0, Vec::with_capacity(0)))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn check_split() {
+        let input = "set kek  löl    something-something";
+        let mut iter = split_position(input);
+        assert_eq!(Some((0, "set")), iter.next());
+        assert_eq!(Some((4, "kek")), iter.next());
+        assert_eq!(Some((8, "")), iter.next());
+        assert_eq!(Some((9, "löl")), iter.next());
+        assert_eq!(Some((14, "")), iter.next()); // "ö" contains two bytes, hence 14, not 13.
+        assert_eq!(Some((15, "")), iter.next());
+        assert_eq!(Some((16, "")), iter.next());
+        assert_eq!(Some((17, "something-something")), iter.next());
+        assert_eq!(None, iter.next());
+
+        let input = "set ";
+        let mut iter = split_position(input);
+        assert_eq!(Some((0, "set")), iter.next());
+        assert_eq!(None, iter.next());
     }
 }

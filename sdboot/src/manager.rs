@@ -140,16 +140,11 @@ impl Manager {
     #[cfg(target_os = "linux")]
     /// Removes the oneshot entry.
     pub fn remove_oneshot(&mut self) -> Result<()> {
-        use rustyline::completion::Candidate;
-
         use crate::attributes::FileAttributes;
 
         match std::fs::File::open(ONESHOT_PATH) {
             Ok(file) => file.set_immutable(false).with_context(|| {
-                format!(
-                    "Unable to make oneshot file {} non-immutable",
-                    ONESHOT_PATH.display()
-                )
+                format!("Unable to make oneshot file {} non-immutable", ONESHOT_PATH)
             })?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 // No file => nothing to delete => success.

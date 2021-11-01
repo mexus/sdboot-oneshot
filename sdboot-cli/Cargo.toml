@@ -1,0 +1,28 @@
+[package]
+name = "sdboot-cli"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# the main library
+sdboot = { path = "../sdboot" }
+
+# logging
+log = "0.4.14"
+fern = { version = "0.6.0", features = ["colored"] }
+
+# error handling
+anyhow = "1.0.44"
+
+# CLI
+structopt = "0.3.25"
+
+# CLI (interactive)
+rustyline = "9.0.0"
+
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# isatty
+nix = "0.23"
