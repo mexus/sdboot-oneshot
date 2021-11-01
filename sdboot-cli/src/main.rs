@@ -36,10 +36,17 @@ struct Args {
 
 #[derive(Debug, StructOpt)]
 enum Command {
-    /// Set one shot entry. Short alias is "s".
-    #[structopt(alias = "s")]
-    Set {
+    /// Set one shot entry. Short alias is "so".
+    #[structopt(name = "set-oneshot", alias = "so")]
+    SetOneshot {
         /// New one shot entry name.
+        entry: String,
+    },
+
+    /// Set default entry. Short alias is "sd".
+    #[structopt(name = "set-default", alias = "sd")]
+    SetDefault {
+        /// New default entry name.
         entry: String,
     },
 
@@ -123,9 +130,19 @@ fn main() -> Result<()> {
     log::info!("Discovered {} entries: {:#?}", entries.len(), entries);
 
     match command {
-        Some(Command::Set { entry }) => {
+        Some(Command::SetOneshot { entry }) => {
             manager.set_oneshot(&entry)?;
             log::info!(r#"Oneshot entry set to "{}""#, entry);
+            if !entries.contains(&entry) {
+                log::warn!(
+                    r#"Please note that there is no entry detected with the name "{}"!"#,
+                    entry
+                )
+            }
+        }
+        Some(Command::SetDefault { entry }) => {
+            manager.set_default(&entry)?;
+            log::info!(r#"Default entry set to "{}""#, entry);
             if !entries.contains(&entry) {
                 log::warn!(
                     r#"Please note that there is no entry detected with the name "{}"!"#,
@@ -157,8 +174,9 @@ fn main() -> Result<()> {
                 };
                 editor.add_history_entry(&input);
                 let mut input = input.split(char::is_whitespace).filter(|s| !s.is_empty());
-                match input.next() {
-                    Some("set") => { /* No op */ }
+                let action = match input.next() {
+                    Some("set-oneshot") => Manager::set_oneshot,
+                    Some("set-default") => Manager::set_default,
                     Some("unset") => {
                         if let Err(e) = manager.remove_oneshot() {
                             log::error!("Unable to remove oneshot: {:#}", e)
@@ -177,7 +195,7 @@ fn main() -> Result<()> {
                         log::warn!("No command specified");
                         continue;
                     }
-                }
+                };
                 let entry = match input.next() {
                     Some(entry) => entry,
                     None => {
@@ -185,11 +203,11 @@ fn main() -> Result<()> {
                         continue;
                     }
                 };
-                if let Err(e) = manager.set_oneshot(entry) {
-                    log::error!("Unable to set oneshot: {:#}", e);
+                if let Err(e) = action(&mut manager, entry) {
+                    log::error!("Unable to set entry: {:#}", e);
                     continue;
                 }
-                log::info!(r#"Oneshot entry set to "{}""#, entry);
+                log::info!(r#"Entry set to "{}""#, entry);
                 if !entries.iter().any(|existing| existing == entry) {
                     log::warn!(
                         r#"Please note that there is no entry detected with the name "{}"!"#,

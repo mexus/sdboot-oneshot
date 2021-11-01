@@ -27,6 +27,12 @@ const SYSTEMD_BOOT_VENDOR: VariableVendor = VariableVendor::Custom(SYSTEMD_BOOT_
 /// (c) https://systemd.io/BOOT_LOADER_INTERFACE/
 const ONESHOT_ENTRY_SHORT: &str = "LoaderEntryOneShot";
 
+/// The EFI variable LoaderEntryDefault contains the default boot loader entry
+/// to use. It contains a NUL-terminated boot loader entry identifier.
+///
+/// (c) https://systemd.io/BOOT_LOADER_INTERFACE/
+const DEFAULT_ENTRY_SHORT: &str = "LoaderEntryDefault";
+
 /// The EFI variable LoaderEntries may contain a series of boot loader entry
 /// identifiers, one after the other, each individually NUL terminated. This may
 /// be used to let the OS know which boot menu entries were discovered by the
@@ -55,10 +61,11 @@ const LOADER_ENTRY_DEFAULT: &str = "LoaderEntryDefault";
 pub struct Manager {
     inner: Box<dyn VarManager>,
     oneshot_var: VariableName,
+    default_var: VariableName,
 }
 
-// Flags on the oneshot entry EFI variable.
-fn oneshot_entry_flags() -> VariableFlags {
+// Flags on the oneshot/default entries EFI variables.
+fn entry_flags() -> VariableFlags {
     VariableFlags::NON_VOLATILE | VariableFlags::BOOTSERVICE_ACCESS | VariableFlags::RUNTIME_ACCESS
 }
 
@@ -74,12 +81,25 @@ const ONESHOT_PATH: &str = concat!(
     "4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
 );
 
+#[cfg(target_os = "linux")]
+const DEFAULT_PATH: &str = concat!(
+    // Path to the EFI variables storage on linux.
+    "/sys/firmware/efi/efivars/",
+    // Name of the EFI variable in question.
+    "LoaderEntryDefault",
+    // Delimiter.
+    "-",
+    // SystemD vendor UUID.
+    "4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
+);
+
 impl Manager {
     /// Initializes the manager.
     pub fn new() -> Self {
         Self {
             inner: efivar::system(),
             oneshot_var: VariableName::new_with_vendor(ONESHOT_ENTRY_SHORT, SYSTEMD_BOOT_VENDOR),
+            default_var: VariableName::new_with_vendor(DEFAULT_ENTRY_SHORT, SYSTEMD_BOOT_VENDOR),
         }
     }
 
@@ -109,7 +129,7 @@ impl Manager {
             None => return Ok(None),
         };
 
-        let expected_flags = oneshot_entry_flags();
+        let expected_flags = entry_flags();
         anyhow::ensure!(
             flags == expected_flags,
             "Flags on the oneshot entry ({:?}) differs from expected ({:?})!",
@@ -121,7 +141,7 @@ impl Manager {
 
     /// Sets value of the oneshot entry.
     pub fn set_oneshot(&mut self, value: &str) -> Result<()> {
-        let flags = oneshot_entry_flags();
+        let flags = entry_flags();
 
         // On linux, we want to preserve the "immutable" extended attribute on
         // the variable file, but we need to make it mutable to save the new
@@ -135,6 +155,24 @@ impl Manager {
         })?;
 
         write::write_utf16_string(&mut *self.inner, &self.oneshot_var, flags, value)
+    }
+
+    /// Sets value of the default entry.
+    pub fn set_default(&mut self, value: &str) -> Result<()> {
+        let flags = entry_flags();
+
+        // On linux, we want to preserve the "immutable" extended attribute on
+        // the variable file, but we need to make it mutable to save the new
+        // value temporary.
+        #[cfg(target_os = "linux")]
+        let _guard = crate::attributes::temp_mutable(DEFAULT_PATH).with_context(|| {
+            format!(
+                "Unable to remove immutability flag on file {}",
+                DEFAULT_PATH
+            )
+        })?;
+
+        write::write_utf16_string(&mut *self.inner, &self.default_var, flags, value)
     }
 
     #[cfg(target_os = "linux")]

@@ -91,14 +91,17 @@ impl Completer for RustylineHelper {
                     0,
                     vec![
                         Pair {
-                            display: "set — set oneshot entry".into(),
-                            replacement: "set".into(),
+                            display: "set-oneshot — set oneshot entry".into(),
+                            replacement: "set-oneshot".into(),
+                        },
+                        Pair {
+                            display: "set-default — set default entry".into(),
+                            replacement: "set-default".into(),
                         },
                         Pair {
                             display: "exit — exit the application".into(),
                             replacement: "exit".into(),
                         },
-                        #[cfg(target_os = "linux")]
                         Pair {
                             display: "unset — removes the oneshot entry".into(),
                             replacement: "unset".into(),
@@ -107,13 +110,19 @@ impl Completer for RustylineHelper {
                 ));
             }
         };
-        if pos < 3 && "set".starts_with(line) {
+        if pos <= 4 && "set-".starts_with(line) {
             return Ok((
                 0,
-                vec![Pair {
-                    display: "set — set oneshot entry".into(),
-                    replacement: "set".into(),
-                }],
+                vec![
+                    Pair {
+                        display: "set-oneshot — set oneshot entry".into(),
+                        replacement: "set-oneshot".into(),
+                    },
+                    Pair {
+                        display: "set-default — set default entry".into(),
+                        replacement: "set-default".into(),
+                    },
+                ],
             ));
         } else if pos < 5 && "unset".starts_with(line) {
             return Ok((
@@ -131,9 +140,25 @@ impl Completer for RustylineHelper {
                     replacement: "exit".into(),
                 }],
             ));
+        } else if pos < 11 && "set-oneshot".starts_with(line) {
+            return Ok((
+                0,
+                vec![Pair {
+                    display: "set-oneshot — set oneshot entry".into(),
+                    replacement: "set-oneshot".into(),
+                }],
+            ));
+        } else if pos < 11 && "set-default".starts_with(line) {
+            return Ok((
+                0,
+                vec![Pair {
+                    display: "set-default — set default entry".into(),
+                    replacement: "set-default".into(),
+                }],
+            ));
         }
         match cmd {
-            "set" => { /* No op */ }
+            "set-oneshot" | "set-default" => { /* No op */ }
             "unset" | "exit" => {
                 // No arguments expected
                 return Ok((0, vec![]));
@@ -145,12 +170,12 @@ impl Completer for RustylineHelper {
         }
 
         if let Some((index, partial_entry)) = items.next() {
-            // User has begun to input an entry.
+            // User has begun to input an entry (either oneshot or default).
             if let Some(relative_pos) = pos.checked_sub(index) {
                 if relative_pos == 0 {
                     // Show all entries
                     return Ok((
-                        4,
+                        12,
                         self.entries
                             .iter()
                             .map(|entry| Pair {
@@ -162,7 +187,7 @@ impl Completer for RustylineHelper {
                 }
                 if relative_pos <= partial_entry.len() {
                     return Ok((
-                        4,
+                        12,
                         self.entries
                             .iter()
                             .filter(|entry| entry.starts_with(partial_entry))
@@ -177,7 +202,7 @@ impl Completer for RustylineHelper {
         } else {
             // No entry yet!
             return Ok((
-                3,
+                11,
                 self.entries
                     .iter()
                     .map(|entry| Pair {
