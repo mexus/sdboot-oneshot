@@ -79,7 +79,15 @@ pub fn read_utf16_string<T: VarReader + ?Sized>(
         Some(data) => data,
         None => return Ok(None),
     };
-    let value = String::from_utf16(&bytes)
-        .with_context(|| format!("Non-UTF16 value: {}", String::from_utf16_lossy(&bytes)))?;
+    let bytes = bytes.as_slice();
+    let bytes = if let [text @ .., 0] = bytes {
+        // Null-terminated string detected. Trim away the final null!
+        text
+    } else {
+        // Convert the bytes as-is.
+        bytes
+    };
+    let value = String::from_utf16(bytes)
+        .with_context(|| format!("Non-UTF16 value: {}", String::from_utf16_lossy(bytes)))?;
     Ok(Some((value, flags)))
 }
