@@ -60,7 +60,7 @@ impl<'a> Iterator for SplitPosition<'a> {
             self.line = remaining.as_str();
             Some((current_position, result))
         } else {
-            let what_remains = std::mem::replace(&mut self.line, "");
+            let what_remains = std::mem::take(&mut self.line);
             Some((self.last_position, what_remains))
         }
     }
