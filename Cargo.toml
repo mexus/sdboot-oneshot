@@ -1,2 +1,3 @@
 [workspace]
 members = ["sdboot", "sdboot-gui", "sdboot-cli"]
+resolver = "2"

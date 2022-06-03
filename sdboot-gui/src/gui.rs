@@ -95,7 +95,7 @@ impl Sandbox for GuiApplication {
         let mut entries = Column::new()
             .width(Length::Fill)
             .spacing(10)
-            .align_items(iced::Align::Start);
+            .align_items(iced::Alignment::Start);
         for radio in radios {
             entries = entries.push(radio);
         }
@@ -109,14 +109,14 @@ impl Sandbox for GuiApplication {
         let buttons = Row::new()
             .width(Length::Fill)
             .spacing(20)
-            .align_items(iced::Align::Center)
+            .align_items(iced::Alignment::Center)
             .push(unset_button)
             .push(apply_button);
 
         let mut content = Column::new()
             .width(Length::Units(500))
             .spacing(20)
-            .align_items(iced::Align::Center)
+            .align_items(iced::Alignment::Center)
             .push(title)
             .push(entries)
             .push(buttons);
