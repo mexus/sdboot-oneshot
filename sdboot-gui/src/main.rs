@@ -4,12 +4,11 @@
 )]
 
 use anyhow::{Context, Result};
-use iced::Application;
+use egui::Vec2;
 use sdboot::Manager;
 use structopt::{clap::arg_enum, StructOpt};
 
 mod gui;
-use gui::GuiApplication;
 
 arg_enum! {
     #[derive(PartialEq, Debug)]
@@ -45,9 +44,13 @@ fn main() -> Result<()> {
         .apply()
         .context("Unable to initialize logging")?;
 
-    let mut settings = iced::Settings::default();
-    settings.window.size = (600, 300);
-    GuiApplication::run(settings).context("Running GUI application")?;
-
-    Ok(())
+    let native_options = eframe::NativeOptions {
+        initial_window_size: Some(Vec2::new(400., 200.)),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "Systemd-boot oneshot entries manager",
+        native_options,
+        Box::new(|_cc| Box::new(gui::GuiApplication::default())),
+    );
 }

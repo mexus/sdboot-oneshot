@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use iced::{button, Button, Column, Container, Length, Radio, Row, Sandbox, Text};
+use egui::TextStyle;
 
 use crate::Manager;
 
@@ -9,23 +9,11 @@ pub struct GuiApplication {
     manager: Manager,
     entries: Arc<[Arc<str>]>,
     selected: Option<Arc<str>>,
-    apply_button_state: button::State,
-    unset_button_state: button::State,
     message: String,
 }
 
-/// Application message.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Message {
-    RadioSelect { new_value: Arc<str> },
-    Unset,
-    Apply,
-}
-
-impl Sandbox for GuiApplication {
-    type Message = Message;
-
-    fn new() -> Self {
+impl Default for GuiApplication {
+    fn default() -> Self {
         let manager = Manager::new();
         let entries: Vec<Arc<str>> = manager
             .entries()
@@ -41,21 +29,23 @@ impl Sandbox for GuiApplication {
             manager,
             entries: Arc::from(entries),
             selected,
-            apply_button_state: button::State::new(),
-            unset_button_state: button::State::new(),
             message: String::new(),
         }
     }
+}
 
-    fn title(&self) -> String {
-        "Systemd-boot oneshot entries manager".to_owned()
-    }
+impl eframe::App for GuiApplication {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("Boot entries");
 
-    fn update(&mut self, message: Self::Message) {
-        match message {
-            Message::RadioSelect { new_value } => self.selected = Some(new_value),
-            Message::Unset => {
+            for entry in self.entries.iter() {
+                ui.radio_value(&mut self.selected, Some(Arc::clone(entry)), entry as &str);
+            }
+
+            if ui.button("Unset").clicked() {
                 log::info!("Removing oneshot entry");
+                self.selected = None;
                 if let Err(e) = self.manager.remove_oneshot() {
                     log::error!("Unable to remove oneshot entry: {:#}", e);
                     self.message = format!("Unable to remove oneshot entry: {:#}", e);
@@ -64,8 +54,9 @@ impl Sandbox for GuiApplication {
                     self.selected = None;
                 }
             }
-            Message::Apply => {
-                if let Some(selected) = self.selected.as_ref() {
+
+            if ui.button("Apply").clicked() {
+                if let Some(selected) = &self.selected {
                     log::info!("Setting oneshot entry to {}", selected);
                     if let Err(e) = self.manager.set_oneshot(selected) {
                         log::error!("Unable to set oneshot entry to {}: {:#}", selected, e);
@@ -78,59 +69,29 @@ impl Sandbox for GuiApplication {
                     self.message = "No entry selected!".to_string();
                 }
             }
-        }
-    }
 
-    fn view(&mut self) -> iced::Element<'_, Self::Message> {
-        let title = Text::new("Boot entries");
-
-        let radios = self.entries.iter().map(|entry| {
-            Radio::new(entry, entry as &str, self.selected.as_ref(), |entry| {
-                Message::RadioSelect {
-                    new_value: Arc::clone(entry),
-                }
-            })
+            if !self.message.is_empty() {
+                ui.horizontal_wrapped(|ui| {
+                    let spacing = ui
+                        .fonts()
+                        .glyph_width(&TextStyle::Body.resolve(ui.style()), ' ');
+                    ui.spacing_mut().item_spacing.x = spacing;
+                    ui.label(&self.message);
+                    if ui.button("📋").clicked() {
+                        if let Err(e) = copy_to_clipboard(&self.message) {
+                            log::error!("Unable to copy message to the clipboard: {e:#}")
+                        }
+                    }
+                });
+            }
         });
-
-        let mut entries = Column::new()
-            .width(Length::Fill)
-            .spacing(10)
-            .align_items(iced::Alignment::Start);
-        for radio in radios {
-            entries = entries.push(radio);
-        }
-
-        let apply_button =
-            Button::new(&mut self.apply_button_state, Text::new("Apply")).on_press(Message::Apply);
-
-        let unset_button =
-            Button::new(&mut self.unset_button_state, Text::new("Unset")).on_press(Message::Unset);
-
-        let buttons = Row::new()
-            .width(Length::Fill)
-            .spacing(20)
-            .align_items(iced::Alignment::Center)
-            .push(unset_button)
-            .push(apply_button);
-
-        let mut content = Column::new()
-            .width(Length::Units(500))
-            .spacing(20)
-            .align_items(iced::Alignment::Center)
-            .push(title)
-            .push(entries)
-            .push(buttons);
-
-        if !self.message.is_empty() {
-            content = content.push(Text::new(&self.message));
-        }
-
-        Container::new(content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .padding(20)
-            .center_x()
-            .center_y()
-            .into()
     }
+}
+
+fn copy_to_clipboard(value: &str) -> anyhow::Result<()> {
+    use anyhow::Context;
+    let mut clipboard = arboard::Clipboard::new().context("Can't obtain a clipboard handle")?;
+    clipboard
+        .set_text(value.to_string())
+        .context("Unable to set a clipboard contents")
 }

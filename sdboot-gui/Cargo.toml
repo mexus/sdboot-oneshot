@@ -11,7 +11,9 @@ description = "Setting sd-boot oneshot"
 sdboot = { path = "../sdboot" }
 
 # GUI
-iced = "0.4.2"
+egui = "0.18.1"
+eframe = "0.18"
+arboard = "2.1.1"
 
 # CLI
 structopt = "0.3.25"
