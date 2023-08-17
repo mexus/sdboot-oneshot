@@ -20,9 +20,9 @@ anyhow = "1.0.44"
 structopt = "0.3.25"
 
 # CLI (interactive)
-rustyline = "9.0.0"
+rustyline = "12.0.0"
 
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # isatty
-nix = "0.24"
+nix = "0.26"

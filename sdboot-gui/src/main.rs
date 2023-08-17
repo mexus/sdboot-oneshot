@@ -4,6 +4,7 @@
 )]
 
 use anyhow::{Context, Result};
+use display_error_chain::DisplayErrorChain;
 use egui::Vec2;
 use sdboot::Manager;
 use structopt::{clap::arg_enum, StructOpt};
@@ -48,9 +49,12 @@ fn main() -> Result<()> {
         initial_window_size: Some(Vec2::new(400., 200.)),
         ..Default::default()
     };
-    eframe::run_native(
+    if let Err(e) = eframe::run_native(
         "Systemd-boot oneshot entries manager",
         native_options,
-        Box::new(|_cc| Box::new(gui::GuiApplication::default())),
-    );
+        Box::new(|_cc| Box::<gui::GuiApplication>::default()),
+    ) {
+        anyhow::bail!("App terminated with error: {}", DisplayErrorChain::new(&e))
+    }
+    Ok(())
 }

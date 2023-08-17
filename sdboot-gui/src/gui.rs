@@ -72,9 +72,8 @@ impl eframe::App for GuiApplication {
 
             if !self.message.is_empty() {
                 ui.horizontal_wrapped(|ui| {
-                    let spacing = ui
-                        .fonts()
-                        .glyph_width(&TextStyle::Body.resolve(ui.style()), ' ');
+                    let spacing =
+                        ui.fonts(|f| f.glyph_width(&TextStyle::Body.resolve(ui.style()), ' '));
                     ui.spacing_mut().item_spacing.x = spacing;
                     ui.label(&self.message);
                     if ui.button("📋").clicked() {

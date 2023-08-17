@@ -9,8 +9,8 @@ license = "Apache-2.0/MIT"
 
 [dependencies]
 # working with EFI variables
-efivar = "0.2.1"
-uuid = "0.8.2"
+efivar = "1.4.0"
+uuid = "1.4.1"
 
 # logging
 log = "0.4.14"
@@ -24,4 +24,4 @@ anyhow = "1.0.44"
 libc = "0.2.105"
 
 # ioctl
-nix = "0.24"
+nix = "0.26"

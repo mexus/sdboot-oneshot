@@ -84,9 +84,9 @@ fn main() -> Result<()> {
     let colors = ColoredLevelConfig::new()
         .info(Color::Green)
         .debug(Color::Cyan);
-    let formatter: Box<
-        dyn Fn(fern::FormatCallback, &std::fmt::Arguments, &log::Record) + Sync + Send,
-    > = if colorful_logs {
+    type Formatter =
+        Box<dyn Fn(fern::FormatCallback, &std::fmt::Arguments, &log::Record) + Sync + Send>;
+    let formatter: Formatter = if colorful_logs {
         Box::new(move |out, message, record| {
             out.finish(format_args!(
                 "{color_line}{message}\x1B[0m",
@@ -155,7 +155,7 @@ fn main() -> Result<()> {
             log::info!("Oneshot entry unset");
         }
         Some(Command::Interactive) => {
-            let mut editor = rustyline::Editor::new();
+            let mut editor = rustyline::Editor::new().context("Unable to initialize the editor")?;
             editor.set_helper(Some(RustylineHelper::new(entries.clone())));
 
             let prompt = if colorful_logs {
@@ -175,7 +175,9 @@ fn main() -> Result<()> {
                     }
                     Err(e) => return Err(e).context("Input error"),
                 };
-                editor.add_history_entry(&input);
+                editor
+                    .add_history_entry(&input)
+                    .context("Unable to add a history entry")?;
                 let mut input = input.split(char::is_whitespace).filter(|s| !s.is_empty());
                 let action = match input.next() {
                     Some("set-oneshot") => Manager::set_oneshot,
