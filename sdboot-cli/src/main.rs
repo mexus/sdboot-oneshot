@@ -1,50 +1,41 @@
 use anyhow::{Context, Result};
+use clap::{Parser, Subcommand};
 use fern::colors::{Color, ColoredLevelConfig};
 use sdboot::Manager;
-use structopt::{clap::arg_enum, StructOpt};
 
-mod interactive;
-use interactive::RustylineHelper;
-
-arg_enum! {
-    #[derive(PartialEq, Debug)]
-    pub enum ColorMode {
-        Auto,
-        On,
-        Off,
-    }
+#[derive(PartialEq, Debug, clap::ValueEnum, Clone, Copy)]
+pub enum ColorMode {
+    Auto,
+    On,
+    Off,
 }
 
 /// A simple utility to manage systemd-boot oneshot entry.
-#[derive(Debug, StructOpt)]
+#[derive(Parser)]
 struct Args {
     /// Be verbose.
-    #[structopt(long, short)]
+    #[clap(long, short)]
     verbose: bool,
 
     /// Set the color mode.
-    #[structopt(
-        long = "color", default_value = "auto",
-        possible_values = &ColorMode::variants(),
-        case_insensitive = true,
-    )]
+    #[clap(value_enum, long = "color", default_value_t = ColorMode::Auto)]
     color_mode: ColorMode,
 
-    #[structopt(subcommand)]
+    #[command(subcommand)]
     command: Option<Command>,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Subcommand)]
 enum Command {
     /// Set one shot entry. Short alias is "so".
-    #[structopt(name = "set-oneshot", alias = "so")]
+    #[clap(name = "set-oneshot", alias = "so")]
     SetOneshot {
         /// New one shot entry name.
         entry: String,
     },
 
     /// Set default entry. Short alias is "sd".
-    #[structopt(name = "set-default", alias = "sd")]
+    #[clap(name = "set-default", alias = "sd")]
     SetDefault {
         /// New default entry name.
         entry: String,
@@ -52,10 +43,6 @@ enum Command {
 
     /// Removes the one shot entry.
     Unset,
-
-    /// Enter the interactive mode. Short alias is "i".
-    #[structopt(alias = "i")]
-    Interactive,
 }
 
 fn main() -> Result<()> {
@@ -63,7 +50,7 @@ fn main() -> Result<()> {
         verbose,
         command,
         color_mode,
-    } = Args::from_args();
+    } = Args::parse();
 
     let colorful_logs = match color_mode {
         ColorMode::Auto => {
@@ -153,73 +140,6 @@ fn main() -> Result<()> {
         Some(Command::Unset) => {
             manager.remove_oneshot()?;
             log::info!("Oneshot entry unset");
-        }
-        Some(Command::Interactive) => {
-            let mut editor = rustyline::Editor::new().context("Unable to initialize the editor")?;
-            editor.set_helper(Some(RustylineHelper::new(entries.clone())));
-
-            let prompt = if colorful_logs {
-                format!(
-                    "{color}>>\x1B[0m ",
-                    color = format_args!("\x1B[{}m", Color::BrightGreen.to_fg_str())
-                )
-            } else {
-                ">> ".to_owned()
-            };
-            loop {
-                let input = match editor.readline(&prompt) {
-                    Ok(input) => input,
-                    Err(rustyline::error::ReadlineError::Eof) => {
-                        // Graceful termination
-                        break;
-                    }
-                    Err(e) => return Err(e).context("Input error"),
-                };
-                editor
-                    .add_history_entry(&input)
-                    .context("Unable to add a history entry")?;
-                let mut input = input.split(char::is_whitespace).filter(|s| !s.is_empty());
-                let action = match input.next() {
-                    Some("set-oneshot") => Manager::set_oneshot,
-                    Some("set-default") => Manager::set_default,
-                    Some("unset") => {
-                        if let Err(e) = manager.remove_oneshot() {
-                            log::error!("Unable to remove oneshot: {:#}", e)
-                        }
-                        continue;
-                    }
-                    Some("exit") => {
-                        // Graceful termination.
-                        break;
-                    }
-                    Some(cmd) => {
-                        log::warn!(r#"Unknown command "{}""#, cmd);
-                        continue;
-                    }
-                    None => {
-                        log::warn!("No command specified");
-                        continue;
-                    }
-                };
-                let entry = match input.next() {
-                    Some(entry) => entry,
-                    None => {
-                        log::warn!("No entry specified");
-                        continue;
-                    }
-                };
-                if let Err(e) = action(&mut manager, entry) {
-                    log::error!("Unable to set entry: {:#}", e);
-                    continue;
-                }
-                log::info!(r#"Entry set to "{}""#, entry);
-                if !entries.iter().any(|existing| existing == entry) {
-                    log::warn!(
-                        r#"Please note that there is no entry detected with the name "{}"!"#,
-                        entry
-                    );
-                }
-            }
         }
         None => { /* No op */ }
     }

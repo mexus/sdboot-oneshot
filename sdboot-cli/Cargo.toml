@@ -17,10 +17,7 @@ fern = { version = "0.6.0", features = ["colored"] }
 anyhow = "1.0.44"
 
 # CLI
-structopt = "0.3.25"
-
-# CLI (interactive)
-rustyline = "12.0.0"
+clap = { version = "4.4.2", features = ["derive", "env"] }
 
 
 [target.'cfg(target_os = "linux")'.dependencies]
