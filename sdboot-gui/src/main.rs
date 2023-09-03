@@ -4,24 +4,15 @@
 )]
 
 use anyhow::{Context, Result};
+use clap::Parser;
 use display_error_chain::DisplayErrorChain;
 use egui::Vec2;
 use sdboot::Manager;
-use structopt::{clap::arg_enum, StructOpt};
 
 mod gui;
 
-arg_enum! {
-    #[derive(PartialEq, Debug)]
-    pub enum ColorMode {
-        Auto,
-        On,
-        Off,
-    }
-}
-
 /// A simple utility to manage systemd-boot oneshot entry.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 struct Args {
     /// Be verbose.
     #[structopt(long, short)]
@@ -29,7 +20,7 @@ struct Args {
 }
 
 fn main() -> Result<()> {
-    let Args { verbose } = Args::from_args();
+    let Args { verbose } = Args::parse();
 
     fern::Dispatch::new()
         .format(|out, message, record| out.finish(format_args!("[{}] {}", record.level(), message)))

@@ -16,7 +16,7 @@ eframe = "0.22"
 arboard = "3.2.0"
 
 # CLI
-structopt = "0.3.25"
+clap = { version = "4.4.2", features = ["derive"] }
 
 # logging
 log = "0.4.14"
