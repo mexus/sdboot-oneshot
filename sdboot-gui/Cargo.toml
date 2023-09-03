@@ -24,7 +24,7 @@ fern = "0.6.0"
 
 # error handling
 anyhow = "1.0.44"
-display-error-chain = "0.1.1"
+display-error-chain = "0.2"
 
 [target.'cfg(target_os="windows")'.build-dependencies]
 winres = "0.1"
