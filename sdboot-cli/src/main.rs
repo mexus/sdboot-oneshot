@@ -12,6 +12,7 @@ pub enum ColorMode {
 
 /// A simple utility to manage systemd-boot oneshot entry.
 #[derive(Parser)]
+#[clap(version)]
 struct Args {
     /// Be verbose.
     #[clap(long, short)]
