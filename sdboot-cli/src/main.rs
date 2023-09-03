@@ -101,8 +101,17 @@ fn main() -> Result<()> {
 
     let mut manager = Manager::new();
 
-    log::info!(r#"Default entry: "{}""#, manager.get_default_entry()?);
-    log::info!(r#"Currently booted: "{}""#, manager.get_selected_entry()?);
+    if let Some(name) = manager.get_default_entry()? {
+        log::info!(r#"Default entry: "{name}""#);
+    } else {
+        log::info!("Default entry: not set");
+    }
+
+    if let Some(name) = manager.get_selected_entry()? {
+        log::info!(r#"Currently booted: "{name}""#);
+    } else {
+        log::info!(r#"Currently booted: not booted with systemd-boot"#);
+    }
 
     if let Some(current_oneshot_entry) = manager.get_oneshot()? {
         log::info!(

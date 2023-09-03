@@ -22,4 +22,4 @@ clap = { version = "4.4.2", features = ["derive", "env"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # isatty
-nix = "0.26"
+nix = "0.27"

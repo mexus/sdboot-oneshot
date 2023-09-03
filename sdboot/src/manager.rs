@@ -103,22 +103,21 @@ impl Manager {
         }
     }
 
-    fn get_string(&self, var_name: &str) -> Result<String> {
-        let (value, _flags) = read::read_utf16_string(
+    fn get_string(&self, var_name: &str) -> Result<Option<String>> {
+        Ok(read::read_utf16_string(
             &*self.inner,
             &VariableName::new_with_vendor(var_name, SYSTEMD_BOOT_VENDOR),
         )?
-        .with_context(|| format!("Variable {} is not set", var_name))?;
-        Ok(value)
+        .map(|(string, _flags)| string))
     }
 
     /// Returns the entry that was currently booted.
-    pub fn get_selected_entry(&self) -> Result<String> {
+    pub fn get_selected_entry(&self) -> Result<Option<String>> {
         self.get_string(LOADER_ENTRY_SELECTED)
     }
 
     /// Returns the default entry.
-    pub fn get_default_entry(&self) -> Result<String> {
+    pub fn get_default_entry(&self) -> Result<Option<String>> {
         self.get_string(LOADER_ENTRY_DEFAULT)
     }
 
